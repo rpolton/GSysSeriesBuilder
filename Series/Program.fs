@@ -14,6 +14,6 @@ open GSeriesBuilder
             let y = float 5 // some constant
             let approx z = y / z
             match SeriesBuilder.closest (approx z') s with | (a,_) -> a
-        printf "%f %f" number1 (number2 2.6)
+        printf "%f %f" (float number1) (number2 2.6)
         0        
 

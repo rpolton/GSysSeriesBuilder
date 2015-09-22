@@ -12,7 +12,20 @@ module SeriesBuilder =
             Some(``25 times a`` / 25.0, b)
         with :? System.DivideByZeroException -> None // or we could check whether x is -50 or -10 (the roots of the quadratic)
 
-    let series (firstNumber:float) growthRate length =
+//    let isFinite f = not (System.Double.IsNaN(f) || System.Double.IsInfinity(f))
+//
+//    type FiniteFloat = FiniteFloat of float with
+//        static member op_Explicit (FiniteFloat f) = f
+//
+//    type ArbitraryModifiers =
+//        static member FiniteFloat() =
+//            Arb.from<float> |>
+//            Arb.filter isFinite |>
+//            Arb.convert FiniteFloat float
+//
+//    Arb.register<ArbitraryModifiers>()
+
+    let series firstNumber growthRate length =
         if firstNumber >= 0.0 && growthRate <= 0.0 then failwith "Cannot generate a sequence of more than one element with +ve firstNumber and -ve growthRate"
         let s =
             let rec loop x = seq { yield (growthRate * (pown firstNumber x)) ; yield! loop (x+1) }
@@ -45,7 +58,8 @@ module SeriesBuilder =
         // find the nearest, or next highest in the case of being exactly in the middle, neighbour of v in l
         // by minimising the distance from each element to v
         // Could possibly optimise this method by making use of the fact that the input list is sorted according to the problem spec
-        Seq.fold (fun state elem -> 
+        Seq.fold (fun state elem' -> 
+            let elem = float elem'
             let distance = abs (v-elem)
             if distance <= (snd state) then (elem,distance) else state // <= gives the upper bound, < would give the lower in the case of v being midway
         ) (0.0,System.Double.MaxValue) // problem here if the series contains numbers that are further than MaxValue apart, eg -1 and MaxValue
@@ -58,21 +72,32 @@ module SeriesBuilderTester =
         let length = rnd.Next(1, 50)
         seq { for a in 1 .. length -> rnd.NextDouble() } // all values will be between 0 and 1
 
-// When I get FsCheck to generate sequences of floats *and* an integer then we can use this instead of the clunky
-// manual tests below
-//    let generateRandomDouble () = 
-//        let rnd = System.Random()
-//        gen { return rnd.NextDouble() }
-//
-//    let randomSeries n = 
-//        Gen.listOfLength n (generateRandomDouble()) 
-
     // a property to test the correctness of the takeNthFromEnd function
     let ``nth from end is the same as skip length-n and take 1`` n l' =
         let l = l' |> List.ofSeq
         let num = l |> Seq.skip (Seq.length l - n) |> Seq.head
         num = SeriesBuilder.takeNthFromEnd n l
 
+    [<Test>]
+    let ``Verify the nth from end is the same as skip and take 1`` () =
+        let propertyToCheck f ((n, lst):int * list<'a>) =
+            (not lst.IsEmpty && (List.length lst >= n) && (n>0)) ==> lazy (f n lst)
+        Check.QuickThrowOnFailure (propertyToCheck ``nth from end is the same as skip length-n and take 1``)
+
+    // a property to test 'closest' - the closest value should be a member of the list
+    let ``the closest value to n should be a member of the list`` n (lst':float list) = 
+        let lst = List.ofSeq lst'
+        let clst, distance = lst |> SeriesBuilder.closest (float n)
+        lst |> List.exists (fun v -> (float v) = clst)
+
+        // This test does not currently run successfully because the generated list may contain NaN, +ve and -ve infinities, none
+        // of which are comparable.
+//    [<Test>]
+//    let ``Verify closest returns a value from the input seq`` () =
+//        let propertyToCheck f ((n, lst):float * float list) =
+//            not lst.IsEmpty ==> lazy (f n lst)
+//        Check.QuickThrowOnFailure (propertyToCheck ``the closest value to n should be a member of the list``)
+        
     let rec runTheTest testf (series:seq<'a>) howMany = 
         match howMany with
         | 0 -> true
@@ -116,7 +141,7 @@ module SeriesBuilderTester =
 //        let property num =
 //            
 //            ``nth from end is the same as skip length-n and take 1`` num
-//        Check.Quick (property num)
+//        Check.QuickThrowOnFailure (property num)
 
     [<Test>]
     let ``Find the closest entry to very large -ve number`` () =
@@ -148,14 +173,14 @@ module SeriesBuilderTester =
             Assert.IsTrue ((SeriesBuilder.f x 1.0).IsSome)) |> ignore
 
     // Property satisfied by the quadratic
-//    [<Test>]
-//    let ``Negative first values occur for -50<x<-10`` () =
-//        let testWithRange f num =
-//            let isInRange i = (i > -50.0) && (i < -10.0)
-//            isInRange num ==> lazy (f num)
-//        let property num =
-//            match SeriesBuilder.f num 1.0 with | Some (a,b) -> a < 0.0 | None -> false
-//        Check.Quick (testWithRange property)
+    [<Test>]
+    let ``Negative first values occur for -50<x<-10`` () =
+        let testWithRange f num =
+            let isInRange i = (i > -50.0) && (i < -10.0)
+            isInRange num ==> lazy (f num)
+        let property num =
+            match SeriesBuilder.f num 1.0 with | Some (a,b) -> a < 0.0 | None -> false
+        Check.QuickThrowOnFailure (testWithRange property)
     
     [<Test>]
     let ``The series is sorted in strictly increasing order`` () =
