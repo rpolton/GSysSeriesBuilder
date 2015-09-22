@@ -12,19 +12,6 @@ module SeriesBuilder =
             Some(``25 times a`` / 25.0, b)
         with :? System.DivideByZeroException -> None // or we could check whether x is -50 or -10 (the roots of the quadratic)
 
-//    let isFinite f = not (System.Double.IsNaN(f) || System.Double.IsInfinity(f))
-//
-//    type FiniteFloat = FiniteFloat of float with
-//        static member op_Explicit (FiniteFloat f) = f
-//
-//    type ArbitraryModifiers =
-//        static member FiniteFloat() =
-//            Arb.from<float> |>
-//            Arb.filter isFinite |>
-//            Arb.convert FiniteFloat float
-//
-//    Arb.register<ArbitraryModifiers>()
-
     let series firstNumber growthRate length =
         if firstNumber >= 0.0 && growthRate <= 0.0 then failwith "Cannot generate a sequence of more than one element with +ve firstNumber and -ve growthRate"
         let s =
@@ -90,18 +77,16 @@ module SeriesBuilderTester =
         let clst, distance = lst |> SeriesBuilder.closest (float n)
         lst |> List.exists (fun v -> (float v) = clst)
 
-        // This test does not currently run successfully because the generated list may contain NaN, +ve and -ve infinities, none
-        // of which are comparable.
-//    [<Test>]
-//    let ``Verify closest returns a value from the input seq`` () =
-//        let propertyToCheck f ((n, lst):float * float list) =
-//            not lst.IsEmpty ==> lazy (f n lst)
-//        Check.QuickThrowOnFailure (propertyToCheck ``the closest value to n should be a member of the list``)
+    [<Test>]
+    let ``Verify closest returns a value from the input seq`` () =
+        let propertyToCheck f ((n, lst):NormalFloat * NormalFloat list) =
+            not lst.IsEmpty ==> lazy (f n.Get (lst |> List.map (fun nf -> nf.Get)))
+        Check.QuickThrowOnFailure (propertyToCheck ``the closest value to n should be a member of the list``)
         
     let rec runTheTest testf (series:seq<'a>) howMany = 
         match howMany with
         | 0 -> true
-        | _ -> NUnit.Framework.Assert.IsTrue (testf series) ; runTheTest testf series (howMany - 1)
+        | _ -> Assert.IsTrue (testf series) ; runTheTest testf series (howMany - 1)
 
     [<Test>]
     let ``Verify that the end is expected value`` () =
